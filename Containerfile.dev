@@ -1,0 +1,50 @@
+# =============================================================================
+# Containerfile.dev  —  ThermaCore development container
+# -----------------------------------------------------------------------------
+# An Arch Linux image with a full development toolchain: compiler, debugger,
+# build system, and editor support tools.  Use this for day-to-day development.
+# Use the plain Containerfile for clean production builds.
+#
+# Usage (with Podman):
+#   podman build -f Containerfile.dev -t thermacore-dev .
+#
+#   Interactive shell with your project mounted:
+#   podman run --rm -it \
+#       --privileged \
+#       -v $(pwd):/workdir \
+#       thermacore-dev bash
+#
+# The --privileged flag is needed because ThermaCore calls ioperm() to access
+# EC I/O ports, which requires elevated permissions even inside a container.
+# =============================================================================
+
+FROM docker.io/library/archlinux:latest
+
+RUN pacman-key --init && \
+    pacman-key --populate archlinux && \
+    pacman -Syu --noconfirm && \
+    pacman -S --noconfirm \
+        # Build tools
+        gcc \
+        cmake \
+        make \
+        ninja \
+        # Library
+        ncurses \
+        # Debugger
+        gdb \
+        # clangd provides IDE-quality autocompletion and error checking when
+        # used with editors like VS Code (via the clangd extension) or Neovim.
+        clang \
+        # Generates compile_commands.json so clangd knows how the project is built
+        bear \
+        # Useful during development: shows a git-style diff of assembly output,
+        # helpful when profiling or verifying EC register access patterns
+        diffutils \
+    && pacman -Scc --noconfirm
+
+WORKDIR /workdir
+
+# Generate a compile_commands.json automatically on first cmake configure.
+# clangd reads this file to understand include paths and compiler flags.
+# Run manually if needed: bear -- cmake --build build

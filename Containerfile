@@ -1,10 +1,13 @@
-FROM docker.io/library/archlinux:latest
+FROM docker.io/library/ubuntu:22.04
 
-# Initialize keys and install dependencies
-RUN pacman-key --init && \
-    pacman-key --populate archlinux && \
-    pacman -Syu --noconfirm && \
-    pacman -S --noconfirm gcc ncurses && \
-    pacman -Scc --noconfirm
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libncursesw5-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workdir

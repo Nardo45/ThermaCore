@@ -1,89 +1,105 @@
 # ThermaCore
 
-Open-source thermal control for Acer Predator systems on Linux
+Open-source thermal control for systems utilizing Embedded Controller (EC) fan management on Linux.
 
-ThermaCore is a Linux-native utility for monitoring and controlling fans on Acer Predator Orion desktops via the Embedded Controller.
+ThermaCore is a Linux-native utility designed to interface with the EC chip to monitor and control cooling systems. It provides a low-level driver interface for hardware that manages thermal sensors and fan speeds through standard x86 I/O ports. While many laptops and desktops rely on proprietary software for thermal management, ThermaCore offers a direct, hardware-level solution for Linux environments.
 
 ## Supported Hardware
 
 * **Acer Predator Orion 3000 (PO3-640)**
+* **Gigabyte G5 KF5**
 
 ### Note on Hardware Support
 
-Support for more models can be added in the future, but it is heavily dependent on community involvement. I cannot add support for hardware I do not physically own.
-
-If you would like your specific PC to be supported, please open an issue with a request. To assist in development, you will need to provide **Embedded Controller (EC) memory dumps** using the included debugger tool. This helps reverse-engineer how PredatorSense interacts with your specific hardware registers.
+The project aims to support a wide range of computers using EC-based fan control. Support for additional models depends on community involvement. If you would like a specific model supported, please open an issue with a request. Development requires Embedded Controller memory dumps from the included debugger tool to reverse-engineer hardware registers.
 
 ## Building
 
-This project uses a containerized build process to avoid installing development dependencies on your host system.
+This project uses a containerized build process to ensure a clean environment without installing development dependencies on the host system.
 
 ### 1. Build the compiler image
-Create the Arch-based builder image:
-```bash
-podman build -t thermacore-builder .
 
+Create the Debian-based builder image:
+
+```bash
+podman build -t thermacore-build .
 ```
 
-### 2. Compile the TUI
+### 2. Compile the project
 
-Run the compiler inside the container to build the main interface:
+Run the compiler inside the container to generate the binaries using CMake:
 
 ```bash
-podman run --rm -v ".:/workdir:Z" thermacore-builder g++ src/tui/orion_tui.cpp -o thermacore -O2 -lncurses -std=c++17
-
+podman run --rm -v $(pwd):/workdir thermacore-build \
+    sh -c "cmake -B build -S . && cmake --build build"
 ```
 
-### 3. Compile the Debugger (for EC Dumps)
+The output binary for the terminal interface is located at `build/TUI/thermacore-tui`.
 
-Run the compiler without the ncurses requirement to build the testing utility:
+## Development Environment
+
+A dedicated development container is available with a full toolchain, including GDB and clangd for IDE support.
+
+### Build the development image
 
 ```bash
-podman run --rm -v ".:/workdir:Z" thermacore-builder g++ src/debugger/fanctl_embedded.cpp -o thermacore-debugger -O2
+podman build -f Containerfile.dev -t thermacore-dev .
+```
 
+### Start an interactive shell
+
+The privileged flag is required because the utility calls ioperm to access hardware I/O ports.
+
+```bash
+podman run --rm -it \
+    --privileged \
+    -v $(pwd):/workdir \
+    thermacore-dev bash
 ```
 
 ## Usage
 
-Both utilities require raw I/O port access to communicate with the hardware and must be run with root privileges.
+Accessing hardware registers requires root privileges.
 
 ### Running the TUI
 
-```bash
-sudo ./thermacore
-
-```
-
-### Dumping EC Memory for Hardware Support
-
-To help add support for a new model, run the debugger and use the `dump` command:
-
-1. Start the debugger: `sudo ./thermacore-debugger`
-2. At the `>` prompt, type: `dump`
-3. Copy the output (the 00-FF hex table) into your GitHub issue.
-
-## Cleanup
-
-**Remove the builder image:**
+Start the terminal interface by specifying your machine type with the `--machine` or `-m` flag. If no flag is provided, the program defaults to the Orion profile.
 
 ```bash
-podman rmi thermacore-builder
+# General usage
+sudo ./build/TUI/thermacore-tui --machine <model>
 
+# For Acer Predator Orion 3000
+sudo ./build/TUI/thermacore-tui --machine orion
+
+# For Gigabyte G5 KF5
+sudo ./build/TUI/thermacore-tui -m g5kf5
 ```
 
-**Remove the binaries:**
+Available machine identifiers:
+* **Acer**: `orion`, `po3-640`
+* **Gigabyte**: `g5kf5`, `g5-kf5`, `G5KF5`
 
-```bash
-rm thermacore thermacore-debugger
+### Controls
 
-```
+Once the TUI is active, use the following commands:
+* **auto**: Returns fans to default firmware logic.
+* **manual**: Enables manual override mode.
+* **set <cpu|front|back> <0-100>**: Sets a specific fan to a static percentage.
+* **q**: Exits the program.
 
-## Roadmap
+### Dumping EC Memory
 
-These features are planned for future updates with no specific due dates:
+To assist in adding hardware support, use the debugger tool to generate a memory table:
 
-* **Background Daemon**: For persistent fan control without keeping a terminal open.
-* **Systemd Integration**: Auto-start fan profiles on boot.
-* **Custom Fan Curves**: Set RPM targets based on temperature thresholds.
-* **Graphical User Interface (GUI)**: A dedicated desktop application.
-* **RGB Control**: Reverse-engineering the EC registers for internal LED management.
+1. Start the debugger: `sudo ./build/Debugger/thermacore-debugger`
+2. Use the `dump` command at the prompt.
+3. Provide the resulting hex table in a GitHub issue.
+
+## Project Structure
+
+* **Global**: Shared static library containing the core driver and machine profiles.
+* **TUI**: Terminal-based user interface.
+* **Daemon**: Background service for persistent control (in development).
+* **GUI**: Graphical user interface (planned).
+* **Debugger**: Utility for hardware register discovery.
