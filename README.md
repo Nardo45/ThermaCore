@@ -30,7 +30,7 @@ podman build -t thermacore-build .
 Run the compiler inside the container to generate the binaries using CMake:
 
 ```bash
-podman run --rm -v $(pwd):/workdir thermacore-build \
+podman run --rm -v $(pwd):/workdir:Z thermacore-build \
     sh -c "cmake -B build -S . && cmake --build build"
 ```
 
